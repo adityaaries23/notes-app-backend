@@ -1,6 +1,5 @@
 const Hapi = require('@hapi/hapi');
-const routes = require('./api/notes/routes');
-const NotesService = require('./services/inMemory/notesService');
+const NotesService = require('./services/inMemory/NotesService');
 const notes = require('./api/notes');
 
 const init = async () => {
@@ -11,12 +10,10 @@ const init = async () => {
     host: process.env.NODE_ENV !== 'production' ? 'localhost' : '0.0.0.0',
     routes: {
       cors: {
-        origin: ['http://notesapp-v1.dicodingacademy.com'],
+        origin: ['*'],
       },
     },
   });
-
-  // server.route(routes);
 
   await server.register({
     plugin: notes,

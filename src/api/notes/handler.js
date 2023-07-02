@@ -8,6 +8,7 @@ class NotesHandler {
     this.putNoteByIdHandler = this.putNoteByIdHandler.bind(this);
     this.deleteNoteByIdHandler = this.deleteNoteByIdHandler.bind(this);
   }
+
   postNoteHandler(request, h) {
     try {
       const { title = 'untitled', body, tags } = request.payload;
