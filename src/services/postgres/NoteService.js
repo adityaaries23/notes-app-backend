@@ -1,22 +1,24 @@
+/* eslint-disable object-curly-newline */
 const { nanoid } = require('nanoid');
 const { Pool } = require('pg');
 const InvariantError = require('../../exceptions/InvariantError');
 const { mapDBToModel } = require('../../../utils');
 const NotFoundError = require('../../exceptions/NotFoundError');
+const AuthorizationError = require('../../exceptions/AuthorizationError');
 
 class NotesService {
   constructor() {
     this._pool = new Pool();
   }
 
-  async addNote({ title, body, tags }) {
+  async addNote(title, body, tags, owner) {
     const id = nanoid(16);
     const createdAt = new Date().toISOString();
     const updatedAt = createdAt;
 
     const query = {
-      text: 'INSERT INTO notes VALUES($1, $2, $3, $4, $5, $6) RETURNING id',
-      values: [id, title, body, tags, createdAt, updatedAt],
+      text: 'INSERT INTO notes VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      values: [id, title, body, tags, createdAt, updatedAt, owner],
     };
     const result = await this._pool.query(query);
 
@@ -27,8 +29,13 @@ class NotesService {
     return result.rows[0].id;
   }
 
-  async getNotes() {
-    const result = await this._pool.query('select * from notes');
+  async getNotes(owner) {
+    const query = {
+      text: 'select * from notes where owner = $1',
+      values: [owner],
+    };
+
+    const result = await this._pool.query(query);
     return result.rows.map(mapDBToModel);
   }
 
@@ -70,6 +77,22 @@ class NotesService {
 
     if (!result.rows.length) {
       throw new NotFoundError('Catatan gagal dihapus. Id tidak ditemukan');
+    }
+  }
+
+  async verifyNoteOwner(id, owner) {
+    const query = {
+      text: 'select * from notes where id = $1',
+      values: [id],
+    };
+    const result = await this._pool.query(query);
+
+    if (!result.rowCount) {
+      throw new NotFoundError('not found');
+    }
+    const note = result.rows[0];
+    if (note.owner !== owner) {
+      throw new AuthorizationError('forbidden');
     }
   }
 }

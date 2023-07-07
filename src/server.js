@@ -1,13 +1,26 @@
 require('dotenv').config();
 
 const Hapi = require('@hapi/hapi');
-const NotesService = require('./services/postgres/NoteService');
+const jwt = require('@hapi/jwt');
+
 const notes = require('./api/notes');
+const NotesService = require('./services/postgres/NoteService');
 const NoteValidator = require('./validator/notes');
+
+const users = require('./api/users');
+const UserService = require('./services/postgres/UserService');
+const UserValidator = require('./validator/users');
+
 const ClientError = require('./exceptions/ClientError');
+const AuthenticationsService = require('./services/postgres/AuthenticationsService');
+const authentications = require('./api/authentications');
+const AuthenticationsValidator = require('./validator/authentications');
+const TokenManager = require('./tokenize/TokenManager');
 
 const init = async () => {
   const noteService = new NotesService();
+  const userService = new UserService();
+  const authenticationsService = new AuthenticationsService();
 
   const server = Hapi.server({
     port: process.env.PORT,
@@ -18,14 +31,54 @@ const init = async () => {
       },
     },
   });
-
-  await server.register({
-    plugin: notes,
-    options: {
-      service: noteService,
-      validator: NoteValidator,
+  await server.register([
+    {
+      plugin: jwt,
     },
+  ]);
+
+  // mendefinisikan strategy otentikasi jwt
+  server.auth.strategy('notesapp_jwt', 'jwt', {
+    keys: process.env.ACCESS_TOKEN_KEY,
+    verify: {
+      aud: false,
+      iss: false,
+      sub: false,
+      maxAgeSec: process.env.ACCESS_TOKEN_AGE,
+    },
+    validate: (artifacts) => ({
+      isValid: true,
+      credentials: {
+        id: artifacts.decoded.payload.id,
+      },
+    }),
   });
+
+  await server.register([
+    {
+      plugin: notes,
+      options: {
+        service: noteService,
+        validator: NoteValidator,
+      },
+    },
+    {
+      plugin: users,
+      options: {
+        service: userService,
+        validator: UserValidator,
+      },
+    },
+    {
+      plugin: authentications,
+      options: {
+        userService,
+        validator: AuthenticationsValidator,
+        tokenManager: TokenManager,
+        authenticationsService,
+      },
+    },
+  ]);
 
   server.ext('onPreResponse', (request, h) => {
     // mendapatkan konteks response dari request
@@ -49,6 +102,7 @@ const init = async () => {
         status: 'error',
         message: 'terjadi kegagalan pada server kami',
       });
+      console.log(response);
       newResponse.code(500);
       return newResponse;
     }
